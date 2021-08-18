@@ -1,0 +1,58 @@
+image: docker
+
+services:
+  - name: docker:dind
+    command: [ "--insecure-registry=211.37.173.7:5000" ]
+
+stages:
+  - build
+  - deploy
+
+variables:
+  APP_NAME: frontend-vue
+  CI_REGISTRY_IMAGE: frontend/$APP_NAME
+  CI_REGISTRY_USER: $GIT_ID
+  CI_REGISTRY_PASSWORD: $GIT_PW
+  CI_REGISTRY_URL: 211.37.173.7:5000
+  CD_GIT_REPOSITORY: 211.37.173.7:8088/root/$CD_CHART_REPO.git
+  CD_CHART_REPO: frontend-vue-chart
+  CD_MANIFEST_FILE: Chart.yaml
+  TAG: $CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
+
+before_script:
+  - echo $CI_REGISTRY_IMAGE:$TAG $PWD
+  - docker login $CI_REGISTRY_URL -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
+
+init-build:
+  stage: build
+  environment:
+    name: development server
+  script:
+    - echo "Hello Init build!"
+    - echo $TAG
+
+build-to-dev:
+  stage: build
+  environment:
+    name: development server
+  script:
+    - docker build -t $CI_REGISTRY_URL/$CI_REGISTRY_IMAGE:$TAG .
+    - docker rm -f frontend-vue
+    - docker run -d -p 8099:80 --rm --name frontend-vue $CI_REGISTRY_URL/$CI_REGISTRY_IMAGE:$TAG
+
+tag_latest_image:
+  stage: deploy
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - docker images
+    - docker push $CI_REGISTRY_URL/$CI_REGISTRY_IMAGE:$TAG
+    - echo $CI_REGISTRY_URL/$CI_REGISTRY_IMAGE:$TAG
+
+deploy-to-build:
+  stage: deploy
+  environment:
+    name: slack message
+  script:
+    - echo "deploy finish!"
+    
